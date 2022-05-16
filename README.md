@@ -1,2 +1,2 @@
-# Data exploration with SQL_The first names of the newborns in France from 1900 to 2020
+# The first names of the newborns in France from 1900 to 2020 : data exploration with SQL
 Explorating with PostgreSQL (environment : Linux Terminal) the data contained in the 2020 first names file edited by INSEE (the french public institute for statistics and economic studies) that lists the first names of the newborns in France from 1900 to 2020 with the number of births per year, per sex and per French department associated to each first name
