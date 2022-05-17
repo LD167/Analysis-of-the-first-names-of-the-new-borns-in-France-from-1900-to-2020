@@ -1,3 +1,5 @@
 -- Connect to PostegreSQL from Linux Terminal
 
 sudo -u postgres psql
+SELECT *
+FROM dpt2020
