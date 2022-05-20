@@ -33,14 +33,11 @@ SELECT annais FROM dpt2020 GROUP BY annais;
 SELECT DISTINCT annais FROM dpt2020 ORDER BY annais;
 -- => we have 122 rows corresponding to the range of years "1900 to 2020" (121 rows) + one unknown year "XXXX"
 
--- Check for each first name check the percentage of births associated to the unknown year "XXXX" 
------ Create the CTE 'nombreparprenom' to get the total number of births by first name
-WITH nombreparprenom(nombre, nombre_total) AS (SELECT preusuel, SUM(nombre) AS nombre_total FROM dpt2020 GROUP BY preusuel)
------ Use the CTE as a table to calculate for each first name the percentage of births associated to the unknown year "XXXX"
-SELECT preusuel, nombre/nombre_total AS pourcentage_annee_inconnue FROM dpt2020 WHERE annais = 'XXXX' GROUP BY preusuel ORDER BY pourcentage_annee_inconnue DESC;
------ Join the CTE with the table
-JOIN nombreparprenom ON dpt2020.preusuel = nombreparprenom.preusuel 
-
+-- Check for each first name the percentage of births associated to the unknown year "XXXX" 
+----- Create two CTE (a and b)
+WITH b(preusuel, nombre_total) AS (SELECT preusuel, SUM(nombre) AS nombre_total FROM dpt2020 GROUP BY preusuel), a(preusuel, nombre) AS (SELECT preusuel, SUM(nombre) FROM dpt2020 WHERE annais ='XXXX' GROUP BY preusuel)
+----- Join the CTE b to the CTE a
+SELECT a.preusuel, a.nombre, nombre_total, 100*CAST(a.nombre AS DECIMAL)/nombre_total AS pourcentage_du_total FROM a JOIN b ON a.preusuel = b.preusuel ORDER BY pourcentage_du_total DESC;
 
 -- EXPLORATION OF THE DATA
 
