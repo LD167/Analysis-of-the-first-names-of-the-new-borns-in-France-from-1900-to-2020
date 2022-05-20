@@ -37,7 +37,7 @@ SELECT DISTINCT annais FROM dpt2020 ORDER BY annais;
 ----- Create two CTE (a and b)
 WITH b(preusuel, nombre_total) AS (SELECT preusuel, SUM(nombre) AS nombre_total FROM dpt2020 GROUP BY preusuel), a(preusuel, nombre) AS (SELECT preusuel, SUM(nombre) FROM dpt2020 WHERE annais ='XXXX' GROUP BY preusuel)
 ----- Join the CTE b to the CTE a
-SELECT a.preusuel, a.nombre, nombre_total, 100*CAST(a.nombre AS DECIMAL)/nombre_total AS pourcentage_du_total FROM a JOIN b ON a.preusuel = b.preusuel ORDER BY pourcentage_du_total DESC;
+SELECT a.preusuel, a.nombre, nombre_total, to_char(100*CAST(a.nombre AS DECIMAL)/nombre_total, '000.99%') AS pourcentage_du_total FROM a JOIN b ON a.preusuel = b.preusuel ORDER BY pourcentage_du_total DESC, nombre_total DESC;
 
 -- EXPLORATION OF THE DATA
 
