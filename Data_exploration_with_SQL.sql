@@ -156,11 +156,17 @@ ORDER BY nombre_par_prenom DESC LIMIT 2;
 ------ How many distinct first names have been given ?
 ---------- during the last decade (from 2011 to 2020) at the national scope ?
 SELECT COUNT(DISTINCT preusuel) FROM nat2020 WHERE annais BETWEEN '2011' AND '2020';
----------- => 22 103 first names
+---------- => 22 103 distinct first names
 ---------- in average per year during the last decade (from 2011 to 2020) at the national scope ?
 WITH a(annais, nombre_annuel_de_prenom) AS (SELECT annais, COUNT(DISTINCT preusuel) AS nombre_annuel_de_prenom FROM nat2020 WHERE annais BETWEEN '2011' AND '2020' GROUP BY annais)
 SELECT ROUND(AVG(nombre_annuel_de_prenom)) FROM a;
----------- => 13 204 first names
+---------- => 13 204 distinct first names
+
+------ Which are the top 4th and 5th years for the number of distinct first names ?
+---------- over the whole period (from 1900 to 2020) at the national scope ?
+SELECT annais, COUNT(DISTINCT preusuel) AS nombre_prenom_par_an FROM nat2020 WHERE annais <> 'XXXX' GROUP BY annais 
+ORDER BY nombre_prenom_par_an DESC LIMIT 2 OFFSET 3;
+---------- => "2011" (13 309 distinct first names), "2015" (13 287 distinct first names)
 
 ------ Which first names have been given for the first time in 2020 since 1900 ?
 ---------- among the first names composed of 3 characters ?
@@ -180,9 +186,11 @@ SELECT before_1990 FROM a
 LEFT JOIN b ON since_1990 = before_1990 WHERE since_1990 IS NULL ORDER BY before_1990;
 ------ => "UTE"
 
------- Which first names have been each year among the top 10 first names for the number of births during the last decade (from 2011 to 2020) ?
-DECLARE @annais INT
-SET @annais = 2011
+------ Which first names have been each year among the top 10 first names for the number of births ?
+---------- during the last decade (from 2011 to 2020) ?
+DECLARE @annee INT
+SET @annee = 2011
+SELECT @annee;
 WHILE @annais < 2020
 BEGIN
 WITH a AS (SELECT preusuel, SUM(nombre) AS nombre_annuel FROM nat2020 WHERE annais = CAST(@annais AS VARCHAR) GROUP BY preusuel ORDER BY nombre_annuel DESC, preusuel LIMIT 10),
