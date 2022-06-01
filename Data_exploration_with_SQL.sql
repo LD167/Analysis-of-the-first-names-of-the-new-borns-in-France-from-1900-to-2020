@@ -7,7 +7,7 @@ sudo -u postgres psql
 
 -- 1) Create the database 'prénoms'
 
-CREATE DATABASE prenoms;
+CREATE DATABASE prénoms;
 
 -- 2) Switch to the database 'prénoms'
 
@@ -151,7 +151,23 @@ SELECT preusuel, SUM(nombre) AS nombre_par_prenom FROM nat2020 WHERE preusuel LI
 ORDER BY nombre_par_prenom DESC LIMIT 2;
 ---------- => "NOÉMIE" (621 births), "NAËLLE" (366 births)
 
--- 2) About the first names :
+------ Which first names have ranked 3rd in the annual number of births ?
+---------- during the last 3 years (from 2018 to 2020) ?
+WITH a AS (SELECT annais, preusuel, SUM(nombre) AS nombre_par_an, DENSE_RANK() OVER (PARTITION BY annais ORDER BY SUM(nombre) DESC) AS rang FROM nat2020 GROUP BY annais, preusuel HAVING annais BETWEEN '2018' AND '2020')
+SELECT annais, preusuel, nombre_par_an FROM a WHERE rang = 3;
+---------- => "RAPHAËL" in "2018" (4 594 births), "LÉO" in "2019" (4 662 births), "GABRIEL" in "2020" (4 415 births)
+
+------ Which first names have ranked each year in the top 10 for the annual number of births ?
+---------- during the last 3 years (from 2018 to 2020) ?
+WITH aa18 AS (SELECT preusuel FROM (SELECT annais, preusuel, SUM(nombre), DENSE_RANK() OVER (PARTITION BY annais ORDER BY SUM(nombre) DESC) AS rang FROM nat2020 GROUP BY annais, preusuel HAVING annais = '2018') a18 WHERE rang <=10), 
+aa19 AS (SELECT preusuel FROM (SELECT annais, preusuel, SUM(nombre), DENSE_RANK() OVER (PARTITION BY annais ORDER BY SUM(nombre) DESC) AS rang FROM nat2020 GROUP BY annais, preusuel HAVING annais = '2019') a19 WHERE rang <=10), 
+aa20 AS (SELECT preusuel FROM (SELECT annais, preusuel, SUM(nombre), DENSE_RANK() OVER (PARTITION BY annais ORDER BY SUM(nombre) DESC) AS rang FROM nat2020 GROUP BY annais, preusuel HAVING annais = '2020') a20 WHERE rang <=10) 
+SELECT preusuel FROM aa18 
+INNER JOIN aa19 USING(preusuel)
+INNER JOIN aa20 USING(preusuel);
+---------- => "ARTHUR", "EMMA", "GABRIEL", "JADE", "LÉO", "LOUIS", "LOUISE", "RAPHAËL"
+
+-- 2) About the number of first names :
 
 ------ How many distinct first names have been given ?
 ---------- during the last decade (from 2011 to 2020) at the national scope ?
@@ -162,11 +178,11 @@ WITH a(annais, nombre_annuel_de_prenom) AS (SELECT annais, COUNT(DISTINCT preusu
 SELECT ROUND(AVG(nombre_annuel_de_prenom)) FROM a;
 ---------- => 13 204 distinct first names
 
------- Which are the top 4th and 5th years for the number of distinct first names ?
+------ Which year ranks 4th in the annual number of distinct first names ?
 ---------- over the whole period (from 1900 to 2020) at the national scope ?
-SELECT annais, COUNT(DISTINCT preusuel) AS nombre_prenom_par_an FROM nat2020 WHERE annais <> 'XXXX' GROUP BY annais 
-ORDER BY nombre_prenom_par_an DESC LIMIT 2 OFFSET 3;
----------- => "2011" (13 309 distinct first names), "2015" (13 287 distinct first names)
+WITH a AS (SELECT annais, COUNT(DISTINCT preusuel) AS nombre_prenom_par_an, DENSE_RANK() OVER (ORDER BY COUNT(DISTINCT preusuel) DESC) AS rang FROM nat2020 WHERE annais <> 'XXXX' GROUP BY annais)
+SELECT annais, nombre_prenom_par_an FROM a WHERE rang = 4;
+---------- => "2011" (13 309 distinct first names)
 
 ------ Which first names have been given for the first time in 2020 since 1900 ?
 ---------- among the first names composed of 3 characters ?
@@ -185,18 +201,6 @@ WITH a(before_1990) AS (SELECT DISTINCT preusuel AS before_1990 FROM nat2020 WHE
 SELECT before_1990 FROM a
 LEFT JOIN b ON since_1990 = before_1990 WHERE since_1990 IS NULL ORDER BY before_1990;
 ------ => "UTE"
-
------- Which first names have been each year among the top 10 first names for the number of births ?
----------- during the last decade (from 2011 to 2020) ?
-DECLARE @annee INT
-SET @annee = 2011
-SELECT @annee;
-WHILE @annais < 2020
-BEGIN
-WITH a AS (SELECT preusuel, SUM(nombre) AS nombre_annuel FROM nat2020 WHERE annais = CAST(@annais AS VARCHAR) GROUP BY preusuel ORDER BY nombre_annuel DESC, preusuel LIMIT 10),
-b AS (SELECT preusuel, SUM(nombre) AS nombre_annuel FROM nat2020 WHERE annais = CAST(@annais + 1 AS VARCHAR) GROUP BY preusuel ORDER BY nombre_annuel DESC, preusuel LIMIT 10) 
-SELECT a.preusuel FROM a
-INNER JOIN b ON a.preusuel = b.preusuel ORDER BY a.preusuel;
 
 
 
