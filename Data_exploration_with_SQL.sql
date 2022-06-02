@@ -34,33 +34,39 @@ COPY dpt2020 FROM '/home/oem/Documents/Lies/INSEE/dpt2020_04.csv' DELIMITER ',' 
 
 -- CHECK DATA
 
--- 1) Check the integrity of the import
+-- 1) Check the integrity of the import of each table
 
 ------ Make a visual check of all columns and rows of the table 'nat2020'
 SELECT * FROM nat2020;
 ------ => we have the expected 4 columns and 667 364 rows
+
 ------ Make a visual check of all columns and rows of the table 'dpt2020'
 SELECT * FROM dpt2020;
 ------ => we have the expected 5 columns and 3 727 554 rows
 
--- 2) Check the data consistency regarding the range of years and departments
+-- 2) Check the data consistency of each table regarding the range of years
 
 ------ List all the years contained in the table 'nat2020'
 SELECT annais FROM nat2020 GROUP BY annais;
 ------ List all the years contained in the table 'dpt2020'
 SELECT DISTINCT annais FROM dpt2020 ORDER BY annais;
 ------ => for both tables, we have 122 rows corresponding to the range of years "1900 to 2020" (121 rows) + one unknown year "XXXX"
+
+-- 3) Check the data consistency of the table 'dpt2020' regarding the range of departments
+
 ------ List all the departments contained in the table 'dpt2020'
 SELECT DISTINCT dpt FROM dpt2020 ORDER BY dpt;
 ------ => we have 100 rows corresponding to 99 known departments + one unknown department "XX"
+
 ------ List all the known departments contained in the table 'dpt2020'
 SELECT DISTINCT CAST(dpt AS INT) WHERE dpt <> 'XX' FROM dpt2020 ORDER BY dpt;
 ------ => we have the 95 French continental departments ("1" to "95") and the 4 French overseas departments ("971" to "974")
+
 ------ Check which years/departments are associated to the unknown department "XX"/year "XXXX"
 SELECT dpt, annais FROM dpt2020 WHERE dpt = 'XX' OR annais = 'XXXX' GROUP BY dpt, annais;
 ------ => the unknown department "XX" is only used for the unknown year "XXXX" (and vice versa)
 
--- 3) Check the data consistency regarding the total number of births
+-- 5) Check the data consistency of the table 'dpt2020' versus the table 'nat2020' regarding the number of births
 
 ------ Calculate the difference in the total number of births between the table 'nat2020' and the table 'dpt2020'
 SELECT (SELECT SUM(nombre) FROM nat2020) AS nb_total_nat, 
@@ -68,22 +74,46 @@ SELECT (SELECT SUM(nombre) FROM nat2020) AS nb_total_nat,
 ((SELECT SUM(nombre) FROM nat2020)-(SELECT SUM(nombre) FROM dpt2020)) AS nb_total_écart;
 ------ => we have an immaterial difference of only -103 births for a total of 86 605 605 births (according to the table 'nat2020')
 
--- 4) Check the data consistency regarding the total number of births with a split between the known years (all years from 1900 to 2020) and the unknown year ("XXXX")
-
------- Calculate the difference in the total number of births between the table 'nat2020' and the table 'dpt2020' for the known years (from 1900 to 2020)
+------ Calculate the same with a split between the known years (all years from 1900 to 2020) and the unknown year ("XXXX")
+---------- Calculate the difference in the total number of births between the table 'nat2020' and the table 'dpt2020' for the known years (from 1900 to 2020)
 SELECT (SELECT SUM(nombre) FROM nat2020 WHERE annais <> 'XXXX') AS nb_total_nat, 
 (SELECT SUM(nombre) FROM dpt2020 WHERE annais <> 'XXXX') AS nb_total_dpt, 
 ((SELECT SUM(nombre) FROM nat2020 WHERE annais <> 'XXXX')-(SELECT SUM(nombre) FROM dpt2020 WHERE annais <> 'XXXX')) AS nb_total_écart
------- Concatenete the previous rows with the rows selected thereafter
+---------- Concatenete the previous rows with the rows selected thereafter
 UNION ALL
------- Calculate the difference in the total number of births between the table 'nat2020' and the table 'dpt2020' for the unknown year ("XXXX")
+---------- Calculate the difference in the total number of births between the table 'nat2020' and the table 'dpt2020' for the unknown year ("XXXX")
 SELECT (SELECT SUM(nombre) FROM nat2020 WHERE annais = 'XXXX') AS nb_total_nat, 
 (SELECT SUM(nombre) FROM dpt2020 WHERE annais = 'XXXX') AS nb_total_dpt, 
 ((SELECT SUM(nombre) FROM nat2020 WHERE annais = 'XXXX')-(SELECT SUM(nombre) FROM dpt2020 WHERE annais = 'XXXX')) AS nb_total_écart;
 ------ => for the known years, the difference is +7 822 178 births so there are lacking births in the table 'dpt2020'
 ------ => for the unknown year, the difference is -7 822 281 births so the lacking births in the table 'dpt2020' have been computed in the unknown year
 
--- 5) Check the data consistency regarding the number of births per year
+-- 6) Check the materiality of the unknown year "XXXX" in the table 'nat2020'
+
+------ Calculate the annual average, the annual maximum and the annual minimum number of births according to the table 'nat2020' (excluding the unknown year "XXXX")
+WITH a AS (SELECT annais, SUM(nombre) AS nb_annuel_nat FROM nat2020 WHERE annais <> 'XXXX' GROUP BY annais)
+SELECT ROUND(AVG(nb_annuel_nat)) AS moy_nb_annuel_nat, MAX(nb_annuel_nat) AS max_nb_annuel_nat, MIN(nb_annuel_nat) AS min_nb_annuel_nat FROM a; 
+------ => annual average = 708 766 births, annual maximum = 908 817 births, annual minimum = 282 497 births
+
+------ Calculate the total unknown number of births (= associated to the unknown year "XXXX") in the table 'nat2020'
+SELECT SUM(nombre) AS nb_annuel_nat FROM nat2020 WHERE annais = 'XXXX';
+------ => total unknown = 844 964 births
+------ => this total number being material (compared to the annual average), we will now check if it remains material after distributing these unknown births over the years
+------ => we will make this check by focusing on a sample of 4 years ("1985", "1995", "2005" and "2015")
+------ => for these 4 years, we will compare the table 'nat2020' with the official annual number of births provided by the INSEE at the following web link "https://www.insee.fr/fr/statistiques/2381380"
+
+------ Calculate the difference and the percentage of difference between the annual number of births according to the table 'nat2020' and the official data for the 4 chosen years
+WITH a AS (SELECT annais, SUM(nombre) AS nb_annuel_nat FROM nat2020 WHERE annais IN ('1985', '1995', '2005', '2015') GROUP BY annais),
+b(annais, nb_annuel_off) AS (SELECT '1985', 796138 UNION ALL SELECT '1995', 759058 UNION ALL SELECT '2005', 806822 UNION ALL SELECT '2015', 798948)
+SELECT annais, nb_annuel_nat-nb_annuel_off AS ecart, to_char(100*(nb_annuel_nat - nb_annuel_off)/nb_annuel_off, '999%') AS pourcentage_ecart FROM a
+JOIN b USING(annais);
+------ => "1985" (-10 118 births, -1%), "1995" (-12 120 births, -1%), "2005" (-12 469 births, -1%), "2015" (-22 894 births, -2%)
+------ => the difference is immaterial for the whole sample with an average difference around -14 000 births per year and an average percentage of difference around -1.25% per year
+------ => furthermore, if we multiply the average difference (-14 000) by the total number of years (121) we have a total of 1 694 000 births which is far higher than the total unknown number of births (844 964)   
+------ => so we can assume that the difference is immaterial for the whole period (from 1900 to 2020)
+------ => so we can ignore the unknown year "XXXX" in the table 'nat2020'
+
+-- 7) Check the materiality of the unknown year "XXXX" in the table 'dpt2020'
 
 ------ Calculate the number of births per year according to the table 'nat2020'
 WITH a(annais, nb_annuel_nat) AS (SELECT annais, SUM(nombre) AS nb_annuel_nat FROM nat2020 GROUP BY annais),
@@ -93,11 +123,36 @@ b(annais, nb_annuel_dpt) AS (SELECT annais, SUM(nombre) AS nb_annuel_dpt FROM dp
 ------ and the percentage of difference based on the table 'nat2020' 
 SELECT a.annais, nb_annuel_nat, nb_annuel_dpt, nb_annuel_nat-nb_annuel_dpt AS nb_annuel_écart, to_char(100*(nb_annuel_nat-nb_annuel_dpt)/nb_annuel_nat, '000.99%') AS pourcentage_écart FROM a
 JOIN b ON a.annais = b.annais;
------- => From 1900 to 1968, the percentage of difference is below 5% : we can ignore the lacking births in the table 'dpt2020'
------- => from 1969, the percentage of difference is between 10% and 24% : we'll have to clean the table 'dpt2020' in order to match the number of births per year with the table 'nat2020'(this will be done with Python)
+------ => from 1900 to 1968, the percentage of difference is below 5% : we can ignore the lacking births in the table 'dpt2020'
+------ => from 1969, the percentage of difference is between 10% and 24% : we will have to clean the table 'dpt2020' in order to match the number of births per year with the table 'nat2020' (this will be done with Python)
 
+-- RESTRUCTURE DATA
+
+-- => we will create a new table 'nat2020bis' that will be the copy of the table 'nat2020' but without the unknown year 'XXXX' and with new names for certain columns and values
+
+-- Create the table 'nat2020bis'
+CREATE TABLE nat2020bis(sexe VARCHAR, preusuel VARCHAR, annais VARCHAR, nombre INT);
+-- Insert the data from the table 'nat2020' into the table 'nat2020bis'
+INSERT INTO nat2020bis SELECT * FROM nat2020;
+-- Drop the unknown year records 
 
 -- EXPLORE DATA
+
+-- Palmarès of the years based on the number of births + general statistics (average, max, min)
+WITH a AS (SELECT annais, SUM(nombre) AS nombre_de_naissance FROM nat2020 WHERE annais <> 'XXXX' GROUP BY annais) SELECT DENSE_RANK() OVER (ORDER BY SUM(nombre) DESC) AS rang, annais, SUM(nombre) AS nombre_de_naissance, (SELECT ROUND(AVG(nombre_de_naissance)) FROM a) AS moyenne_nombre_de_naissance, to_char(100*SUM(nombre)/(SELECT ROUND(AVG(nombre_de_naissance)) FROM a), '000%') AS pourcentage_moyenne_nombre_de_naissance FROM nat2020 WHERE annais <> 'XXXX' GROUP BY annais;
+
+
+-- Detailed statistics per first names for a given year
+SELECT DENSE_RANK() OVER (ORDER BY SUM(nombre) DESC) AS rang, preusuel, SUM(nombre) AS nombre_de_naissance FROM nat2020 WHERE preusuel <> '_PRENOMS_RARES' AND annais = '2020' GROUP BY preusuel
+
+SELECT rang, preusuel, nombre_de_naissance, nombre_moyen_de_naissance FROM a
+LEFT JOIN b USING(annais);
+
+
+CREATE PROCEDURE palmares_prenoms_par_nb_annuel_naissance(@annais VARCHAR)
+AS BEGIN
+SELECT DENSE_RANK() OVER (ORDER BY SUM(nombre) DESC) AS rang, preusuel, SUM(nombre) AS nombre_de_naissance FROM nat2020 WHERE preusuel <> '_PRENOMS_RARES' AND annais = @annais GROUP BY preusuel
+END
 
 -- 1) About the number of births :
 
