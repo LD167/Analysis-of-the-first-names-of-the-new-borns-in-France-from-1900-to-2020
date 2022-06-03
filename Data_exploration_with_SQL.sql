@@ -5,13 +5,13 @@ sudo -u postgres psql
 
 -- IMPORT DATA
 
--- 1) Create the database 'prénoms'
+-- 1) Create the database 'prenoms'
 
-CREATE DATABASE prénoms;
+CREATE DATABASE prenoms;
 
--- 2) Switch to the database 'prénoms'
+-- 2) Switch to the database 'prenoms'
 
-\c prénoms
+\c prenoms
 
 -- 3) Import the data of the file "nat2020.csv"
 
@@ -100,7 +100,7 @@ SELECT SUM(nombre) AS nb_annuel_nat FROM nat2020 WHERE annais = 'XXXX';
 ------ => total unknown = 844 964 births
 ------ => this total number being material (compared to the annual average), we will now check if it remains material after distributing these unknown births over the years
 ------ => we will make this check by focusing on a sample of 4 years ("1985", "1995", "2005" and "2015")
------- => for these 4 years, we will compare the table 'nat2020' with the official annual number of births provided by the INSEE at the following web link "https://www.insee.fr/fr/statistiques/2381380"
+------ => for these 4 years, we will compare the table 'nat2020' with the official annual number of births provided by the INSEE at the following URL : https://www.insee.fr/fr/statistiques/2381380
 
 ------ Calculate the difference and the percentage of difference between the annual number of births according to the table 'nat2020' and the official data for the 4 chosen years
 WITH a AS (SELECT annais, SUM(nombre) AS nb_annuel_nat FROM nat2020 WHERE annais IN ('1985', '1995', '2005', '2015') GROUP BY annais),
@@ -121,25 +121,116 @@ WITH a(annais, nb_annuel_nat) AS (SELECT annais, SUM(nombre) AS nb_annuel_nat FR
 b(annais, nb_annuel_dpt) AS (SELECT annais, SUM(nombre) AS nb_annuel_dpt FROM dpt2020 GROUP BY annais)
 ------ Calculate the difference in the number of births per year between the table 'nat2020' and the table 'dpt2020'
 ------ and the percentage of difference based on the table 'nat2020' 
-SELECT a.annais, nb_annuel_nat, nb_annuel_dpt, nb_annuel_nat-nb_annuel_dpt AS nb_annuel_écart, to_char(100*(nb_annuel_nat-nb_annuel_dpt)/nb_annuel_nat, '000.99%') AS pourcentage_écart FROM a
+SELECT a.annais, nb_annuel_nat, nb_annuel_dpt, nb_annuel_nat-nb_annuel_dpt AS nb_annuel_écart, to_char(100*(nb_annuel_nat-nb_annuel_dpt)/nb_annuel_nat, '999%') AS pourcentage_écart FROM a
 JOIN b ON a.annais = b.annais;
------- => from 1900 to 1968, the percentage of difference is below 5% : we can ignore the lacking births in the table 'dpt2020'
------- => from 1969, the percentage of difference is between 10% and 24% : we will have to clean the table 'dpt2020' in order to match the number of births per year with the table 'nat2020' (this will be done with Python)
+------ => from 1900 to 1968, the percentage of difference is immaterial (below 5%) so, before 1969, we can ignore the unknown year "XXXX" in the table 'dpt2020'
+------ => from 1969, the percentage of difference is material (between 6% and 24%) : we will have to clean the table 'dpt2020' in order to match the number of births per year with the table 'nat2020'
+------ => the cleaning and restructuration of the table 'dpt2020' will be done in Python
+
 
 -- RESTRUCTURE DATA
 
--- => we will create a new table 'nat2020bis' that will be the copy of the table 'nat2020' but without the unknown year 'XXXX' and with new names for certain columns and values
+-- => we will create a new table 'nat2020bis' that will be the copy of the table 'nat2020' but without the unknown year 'XXXX' plus other modifications (columns renamed, values replaced, format type changed)
 
 -- Create the table 'nat2020bis'
 CREATE TABLE nat2020bis(sexe VARCHAR, preusuel VARCHAR, annais VARCHAR, nombre INT);
+
 -- Insert the data from the table 'nat2020' into the table 'nat2020bis'
 INSERT INTO nat2020bis SELECT * FROM nat2020;
--- Drop the unknown year records 
+
+-- Delete the rows associated to the unknown year "XXXX" 
+DELETE FROM nat2020bis WHERE annais = 'XXXX';
+-- => 36 675 rows have been deleted
+
+-- Rename the column 'annais' as 'annee'
+ALTER TABLE nat2020bis RENAME annais TO annee;
+
+-- Rename the column 'preusuel' as 'prenom'
+ALTER TABLE nat2020bis RENAME preusuel TO prenom;
+
+-- In the column 'sexe', replace the value "1" by "garçon"
+UPDATE nat2020bis SET sexe = REPLACE(sexe, '1', 'garçon')
+-- => 630 689 rows have been updated
+
+-- In the column 'sexe', replace the value "2" by "fille"
+UPDATE nat2020bis SET sexe = REPLACE(sexe, '2', 'fille');
+-- => 630 689 rows have been updated
+
+-- In the column 'prenom', replace the value "_PRENOMS_RARES" by "PRENOMS_RARES"
+UPDATE nat2020bis SET prenom = REPLACE(prenom, '_PRENOMS_RARES', 'PRENOMS_RARES');
+-- => 630 689 rows have been updated
+
+-- Change the format type of the column 'annee' (from "VARCHAR" to "INT")
+ALTER TABLE nat2020bis ALTER COLUMN annee TYPE INT USING (annee::integer);
+
+-- Make a visual check of all columns and rows of the table 'nat2020bis'
+SELECT * FROM nat2020bis;
+-- => we have the expected renamed columns and replaced values
+
+-- Check that the unknown year "XXXX" doesn't exist any more
+SELECT annee FROM nat2020bis WHERE annee = 'XXXX';
+-- => 0 rows returned
+
 
 -- EXPLORE DATA
 
--- Palmarès of the years based on the number of births + general statistics (average, max, min)
-WITH a AS (SELECT annais, SUM(nombre) AS nombre_de_naissance FROM nat2020 WHERE annais <> 'XXXX' GROUP BY annais) SELECT DENSE_RANK() OVER (ORDER BY SUM(nombre) DESC) AS rang, annais, SUM(nombre) AS nombre_de_naissance, (SELECT ROUND(AVG(nombre_de_naissance)) FROM a) AS moyenne_nombre_de_naissance, to_char(100*SUM(nombre)/(SELECT ROUND(AVG(nombre_de_naissance)) FROM a), '000%') AS pourcentage_moyenne_nombre_de_naissance FROM nat2020 WHERE annais <> 'XXXX' GROUP BY annais;
+-- => we will explore the information recorded in the table 'nat2020bis'
+
+-- 1) Create the generic rankings tables
+
+------ Rankings of the years based on the number of births
+
+------ No split per sex
+---------- Create the table
+CREATE TABLE palmares_annees_par_nombre_de_naissances (rang INT, annee INT, nombre_de_naissances INT);
+---------- Insert the data
+INSERT INTO palmares_annees_par_nombre_de_naissances 
+SELECT * FROM (SELECT DENSE_RANK() OVER (ORDER BY SUM(nombre) DESC) AS rang, annee, SUM(nombre) AS nombre_de_naissances FROM nat2020bis GROUP BY annee) a;
+---------- => 121 rows have been created
+---------- Display the table
+SELECT * FROM palmares_annees_par_nombre_de_naissances;
+
+------ Split per sex
+---------- Create the table
+CREATE TABLE palmares_annees_par_nombre_de_naissances_par_sexe (rang INT, annee INT, sexe VARCHAR, nombre_de_naissances INT);
+---------- Insert the data
+INSERT INTO palmares_annees_par_nombre_de_naissances_par_sexe 
+SELECT * FROM (SELECT DENSE_RANK() OVER (ORDER BY SUM(nombre) DESC, annee) AS rang, annee, sexe, SUM(nombre) AS nombre_de_naissances FROM nat2020bis GROUP BY annee, sexe) a;
+---------- => 242 rows have been created (121 for boys, 121 for girls)
+---------- Display the table
+SELECT * FROM palmares_annees_par_nombre_de_naissances_par_sexe;
+
+------ Only boys
+---------- Create the table
+CREATE TABLE palmares_annees_par_nombre_de_naissances_de_garcons (rang INT, annee INT, sexe VARCHAR, nombre_de_naissances INT);
+---------- Insert the data
+INSERT INTO palmares_annees_par_nombre_de_naissances_de_garcons 
+SELECT * FROM (SELECT DENSE_RANK() OVER (ORDER BY SUM(nombre) DESC, annee) AS rang, annee, sexe, SUM(nombre) AS nombre_de_naissances FROM nat2020bis WHERE sexe = 'garçon' GROUP BY annee, sexe) a;
+---------- => 121 rows have been created
+---------- Display the table
+SELECT * FROM palmares_annees_par_nombre_de_naissances_de_garcons;
+
+------ Rankings of the years based on the number of distinct first names
+
+------ Create the table 'palmares_annees_par_nombre_de_prenoms' as the rankings of the years based on the number of distinct first names
+---------- Create the table
+CREATE TABLE palmares_annees_par_nombre_de_prenoms (rang INT, annee INT, nombre_de_prenoms INT);
+---------- Insert the data
+INSERT INTO palmares_annees_par_nombre_de_prenoms 
+SELECT * FROM (SELECT DENSE_RANK() OVER (ORDER BY COUNT(DISTINCT prenom) DESC) AS rang, annee, COUNT(DISTINCT prenom) AS nombre_de_prenoms FROM nat2020bis GROUP BY annee) a;
+---------- => 121 rows have been created
+---------- Display the table
+SELECT * FROM palmares_annees_par_nombre_de_prenoms;
+
+------ Create the table 'palmares_prenoms_par_nombre_de_naissance' as the rankings of the first names based on the number of births
+---------- Create the table
+CREATE TABLE palmares_prenoms_par_nombre_de_naissances (rang INT, prenom VARCHAR, nombre_de_naissances INT);
+---------- Insert the data
+INSERT INTO palmares_prenoms_par_nombre_de_naissances 
+SELECT * FROM (SELECT DENSE_RANK() OVER (ORDER BY SUM(nombre) DESC, prenom) AS rang, prenom, SUM(nombre) AS nombre_de_naissances FROM nat2020bis GROUP BY prenom) a;
+---------- => 33 099 rows have been created
+---------- Display the table
+SELECT * FROM palmares_prenoms_par_nombre_de_naissances;
 
 
 -- Detailed statistics per first names for a given year
