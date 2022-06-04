@@ -132,181 +132,154 @@ JOIN b ON a.annais = b.annais;
 
 -- => we will create a new table 'nat2020bis' that will be the copy of the table 'nat2020' but without the unknown year 'XXXX' plus other modifications (columns renamed, values replaced, format type changed)
 
+-- 1) Create new table
+
 -- Create the table 'nat2020bis'
 CREATE TABLE nat2020bis(sexe VARCHAR, preusuel VARCHAR, annais VARCHAR, nombre INT);
 
 -- Insert the data from the table 'nat2020' into the table 'nat2020bis'
 INSERT INTO nat2020bis SELECT * FROM nat2020;
 
--- Delete the rows associated to the unknown year "XXXX" 
-DELETE FROM nat2020bis WHERE annais = 'XXXX';
--- => 36 675 rows have been deleted
+-- 2) Delete rows
 
--- Rename the column 'annais' as 'annee'
+------ Delete the rows associated to the unknown year "XXXX" 
+DELETE FROM nat2020bis WHERE annais = 'XXXX';
+------ => 36 675 rows have been deleted
+
+-- 3) Rename columns
+
+------ Rename the column 'annais' as 'annee'
 ALTER TABLE nat2020bis RENAME annais TO annee;
 
--- Rename the column 'preusuel' as 'prenom'
+------ Rename the column 'preusuel' as 'prenom'
 ALTER TABLE nat2020bis RENAME preusuel TO prenom;
 
--- In the column 'sexe', replace the value "1" by "garçon"
+-- 4) Replace values
+
+------ In the column 'sexe', replace the value "1" by "garçon"
 UPDATE nat2020bis SET sexe = REPLACE(sexe, '1', 'garçon')
--- => 630 689 rows have been updated
+------ => 630 689 rows have been updated
 
--- In the column 'sexe', replace the value "2" by "fille"
+------ In the column 'sexe', replace the value "2" by "fille"
 UPDATE nat2020bis SET sexe = REPLACE(sexe, '2', 'fille');
--- => 630 689 rows have been updated
+------ => 630 689 rows have been updated
 
--- In the column 'prenom', replace the value "_PRENOMS_RARES" by "PRENOMS_RARES"
+------ In the column 'prenom', replace the value "_PRENOMS_RARES" by "PRENOMS_RARES"
 UPDATE nat2020bis SET prenom = REPLACE(prenom, '_PRENOMS_RARES', 'PRENOMS_RARES');
--- => 630 689 rows have been updated
+------ => 630 689 rows have been updated
 
--- Change the format type of the column 'annee' (from "VARCHAR" to "INT")
+-- 5) Change format types
+
+------ Change the format type of the column 'annee' (from "VARCHAR" to "INT")
 ALTER TABLE nat2020bis ALTER COLUMN annee TYPE INT USING (annee::integer);
 
--- Make a visual check of all columns and rows of the table 'nat2020bis'
-SELECT * FROM nat2020bis;
--- => we have the expected renamed columns and replaced values
+-- 6) Create new column
 
--- Check that the unknown year "XXXX" doesn't exist any more
+-- => we will create a new column to classify the years per decades
+
+------ Add the column 'decade'
+ALTER TABLE nat2020bis ADD COLUMN decade VARCHAR;
+------ Set values in the column 'decade'
+UPDATE nat2020bis
+SET decade = CASE 
+WHEN annee BETWEEN 1900 AND 1909 THEN 'années 1900'
+WHEN annee BETWEEN 1910 AND 1919 THEN 'années 1910'
+WHEN annee BETWEEN 1920 AND 1929 THEN 'années 1920'
+WHEN annee BETWEEN 1930 AND 1939 THEN 'années 1930'
+WHEN annee BETWEEN 1940 AND 1949 THEN 'années 1940'
+WHEN annee BETWEEN 1950 AND 1959 THEN 'années 1950'
+WHEN annee BETWEEN 1960 AND 1969 THEN 'années 1960'
+WHEN annee BETWEEN 1970 AND 1979 THEN 'années 1970'
+WHEN annee BETWEEN 1980 AND 1989 THEN 'années 1980'
+WHEN annee BETWEEN 1990 AND 1999 THEN 'années 1990'
+WHEN annee BETWEEN 2000 AND 2009 THEN 'années 2000'
+WHEN annee BETWEEN 2010 AND 2019 THEN 'années 2010'
+WHEN 2020 = annee THEN 'year 2020'
+END;
+------ => 630 689 rows have been updated
+
+-- 7) Check the new structure
+
+------ Make a visual check of all columns and rows of the table 'nat2020bis'
+SELECT * FROM nat2020bis;
+------ => we have the expected renamed/added columns and replaced values
+
+------ Check that the unknown year "XXXX" doesn't exist any more
 SELECT annee FROM nat2020bis WHERE annee = 'XXXX';
--- => 0 rows returned
+------ => 0 rows returned
 
 
 -- EXPLORE DATA
 
--- => we will explore the information recorded in the table 'nat2020bis'
+-- => we will explore the table 'nat2020bis'
 
--- 1) Create the generic rankings tables
+-- 1) Global rankings of the years
 
------- Rankings of the years based on the number of births
+------ Based on the number of births
 
------- Without split per sex
----------- Create the table
-CREATE TABLE palmares_annees_par_nombre_de_naissances (rang INT, annee INT, nombre_de_naissances INT);
----------- Insert the data
-INSERT INTO palmares_annees_par_nombre_de_naissances 
-SELECT * FROM (SELECT DENSE_RANK() OVER (ORDER BY SUM(nombre) DESC) AS rang, annee, SUM(nombre) AS nombre_de_naissances FROM nat2020bis GROUP BY annee) a;
----------- => 121 rows have been created
----------- Display the table
-SELECT * FROM palmares_annees_par_nombre_de_naissances;
+---------- Boys and girls combined
+SELECT DENSE_RANK() OVER (ORDER BY SUM(nombre) DESC) AS rang, annee, SUM(nombre) AS nombre_de_naissances FROM nat2020bis GROUP BY annee;
+---------- Boys and girls separated
+SELECT DENSE_RANK() OVER (ORDER BY SUM(nombre) DESC, annee) AS rang, annee, sexe, SUM(nombre) AS nombre_de_naissances FROM nat2020bis GROUP BY annee, sexe;
+---------- Only boys
+SELECT DENSE_RANK() OVER (ORDER BY SUM(nombre) DESC) AS rang, annee, sexe, SUM(nombre) AS nombre_de_naissances FROM nat2020bis WHERE sexe = 'garçon' GROUP BY annee, sexe;
+---------- Only girls
+SELECT DENSE_RANK() OVER (ORDER BY SUM(nombre) DESC) AS rang, annee, sexe, SUM(nombre) AS nombre_de_naissances FROM nat2020bis WHERE sexe = 'fille' GROUP BY annee, sexe;
 
------- With split per sex
----------- Create the table
-CREATE TABLE palmares_annees_par_nombre_de_naissances_par_sexe (rang INT, annee INT, sexe VARCHAR, nombre_de_naissances INT);
----------- Insert the data
-INSERT INTO palmares_annees_par_nombre_de_naissances_par_sexe 
-SELECT * FROM (SELECT DENSE_RANK() OVER (ORDER BY SUM(nombre) DESC, annee) AS rang, annee, sexe, SUM(nombre) AS nombre_de_naissances FROM nat2020bis GROUP BY annee, sexe) a;
----------- => 242 rows have been created (121 for boys, 121 for girls)
----------- Display the table
-SELECT * FROM palmares_annees_par_nombre_de_naissances_par_sexe;
+------ Based on the number of distinct first names
 
------- Only boys
----------- Create the table
-CREATE TABLE palmares_annees_par_nombre_de_naissances_de_garcons (rang INT, annee INT, sexe VARCHAR, nombre_de_naissances INT);
----------- Insert the data
-INSERT INTO palmares_annees_par_nombre_de_naissances_de_garcons 
-SELECT * FROM (SELECT DENSE_RANK() OVER (ORDER BY SUM(nombre) DESC, annee) AS rang, annee, sexe, SUM(nombre) AS nombre_de_naissances FROM nat2020bis WHERE sexe = 'garçon' GROUP BY annee, sexe) a;
----------- => 121 rows have been created
----------- Display the table
-SELECT * FROM palmares_annees_par_nombre_de_naissances_de_garcons;
+---------- Boys and girls combined
+SELECT DENSE_RANK() OVER (ORDER BY COUNT(DISTINCT prenom) DESC) AS rang, annee, COUNT(DISTINCT prenom) AS nombre_de_prenoms FROM nat2020bis GROUP BY annee;
+---------- Boys and girls separated
+SELECT DENSE_RANK() OVER (ORDER BY COUNT(DISTINCT prenom) DESC) AS rang, annee, sexe, COUNT(DISTINCT prenom) AS nombre_de_prenoms FROM nat2020bis GROUP BY annee, sexe;
+---------- Only boys
+SELECT DENSE_RANK() OVER (ORDER BY COUNT(DISTINCT prenom) DESC) AS rang, annee, sexe, COUNT(DISTINCT prenom) AS nombre_de_prenoms FROM nat2020bis WHERE sexe = 'garçon' GROUP BY annee, sexe;
+---------- Only girls
+SELECT DENSE_RANK() OVER (ORDER BY COUNT(DISTINCT prenom) DESC) AS rang, annee, sexe, COUNT(DISTINCT prenom) AS nombre_de_prenoms FROM nat2020bis WHERE sexe = 'fille' GROUP BY annee, sexe;
 
------- Only girls
----------- Create the table
-CREATE TABLE palmares_annees_par_nombre_de_naissances_de_filles (rang INT, annee INT, sexe VARCHAR, nombre_de_naissances INT);
----------- Insert the data
-INSERT INTO palmares_annees_par_nombre_de_naissances_de_filles 
-SELECT * FROM (SELECT DENSE_RANK() OVER (ORDER BY SUM(nombre) DESC, annee) AS rang, annee, sexe, SUM(nombre) AS nombre_de_naissances FROM nat2020bis WHERE sexe = 'fille' GROUP BY annee, sexe) a;
----------- => 121 rows have been created
----------- Display the table
-SELECT * FROM palmares_annees_par_nombre_de_naissances_de_filles;
+-- 2) Global rankings of the first names
 
------- Rankings of the years based on the number of distinct first names
+------ Based on the number of births (then on the number of disctinct years)
 
------- Without split per sex
----------- Create the table
-CREATE TABLE palmares_annees_par_nombre_de_prenoms (rang INT, annee INT, nombre_de_prenoms INT);
----------- Insert the data
-INSERT INTO palmares_annees_par_nombre_de_prenoms 
-SELECT * FROM (SELECT DENSE_RANK() OVER (ORDER BY COUNT(DISTINCT prenom) DESC) AS rang, annee, COUNT(DISTINCT prenom) AS nombre_de_prenoms FROM nat2020bis GROUP BY annee) a;
----------- => 121 rows have been created
----------- Display the table
-SELECT * FROM palmares_annees_par_nombre_de_prenoms;
+---------- Boys and girls combined
+SELECT DENSE_RANK() OVER (ORDER BY SUM(nombre) DESC, COUNT(DISTINCT annee) DESC) AS rang, prenom, SUM(nombre) AS nombre_de_naissances, COUNT(DISTINCT annee) AS nombre_d_annees FROM nat2020bis WHERE prenom <> 'PRENOMS_RARES' GROUP BY prenom;
+---------- Boys and girls separated
+SELECT DENSE_RANK() OVER (ORDER BY SUM(nombre) DESC, COUNT(DISTINCT annee) DESC) AS rang, prenom, sexe, SUM(nombre) AS nombre_de_naissances, COUNT(DISTINCT annee) AS nombre_d_annees FROM nat2020bis WHERE prenom <> 'PRENOMS_RARES' GROUP BY prenom, sexe;
+---------- Only boys
+SELECT DENSE_RANK() OVER (ORDER BY SUM(nombre) DESC, COUNT(DISTINCT annee) DESC) AS rang, prenom, sexe, SUM(nombre) AS nombre_de_naissances, COUNT(DISTINCT annee) AS nombre_d_annees FROM nat2020bis WHERE prenom <> 'PRENOMS_RARES' AND sexe = 'garçon' GROUP BY prenom, sexe;
+---------- Only girls
+SELECT DENSE_RANK() OVER (ORDER BY SUM(nombre) DESC, COUNT(DISTINCT annee) DESC) AS rang, prenom, sexe, SUM(nombre) AS nombre_de_naissances, COUNT(DISTINCT annee) AS nombre_d_annees FROM nat2020bis WHERE prenom <> 'PRENOMS_RARES' AND sexe = 'fille' GROUP BY prenom, sexe;
 
------- With split per sex
----------- Create the table
-CREATE TABLE palmares_annees_par_nombre_de_prenoms_par_sexe (rang INT, annee INT, sexe VARCHAR, nombre_de_prenoms INT);
----------- Insert the data
-INSERT INTO palmares_annees_par_nombre_de_prenoms_par_sexe 
-SELECT * FROM (SELECT DENSE_RANK() OVER (ORDER BY COUNT(DISTINCT prenom) DESC) AS rang, annee, sexe, COUNT(DISTINCT prenom) AS nombre_de_prenoms FROM nat2020bis GROUP BY annee, sexe) a;
----------- => 242 rows have been created (121 for boys, 121 for girls)
----------- Display the table
-SELECT * FROM palmares_annees_par_nombre_de_prenoms_par_sexe;
+------ Based on the number of distinct years (then on the number of births)
 
------- Only boys
----------- Create the table
-CREATE TABLE palmares_annees_par_nombre_de_prenoms_de_garcons (rang INT, annee INT, sexe VARCHAR, nombre_de_prenoms INT);
----------- Insert the data
-INSERT INTO palmares_annees_par_nombre_de_prenoms_de_garcons 
-SELECT * FROM (SELECT DENSE_RANK() OVER (ORDER BY COUNT(DISTINCT prenom) DESC) AS rang, annee, sexe, COUNT(DISTINCT prenom) AS nombre_de_prenoms FROM nat2020bis WHERE sexe = 'garçon' GROUP BY annee, sexe) a;
----------- => 121 rows have been created
----------- Display the table
-SELECT * FROM palmares_annees_par_nombre_de_prenoms_de_garcons;
+---------- Boys and girls combined
+SELECT DENSE_RANK() OVER (ORDER BY COUNT(DISTINCT annee) DESC, SUM(nombre) DESC) AS rang, prenom, COUNT(DISTINCT annee) AS nombre_d_annees, SUM(nombre) AS nombre_de_naissances FROM nat2020bis WHERE prenom <> 'PRENOMS_RARES' GROUP BY prenom;
+---------- Boys and girls separated
+SELECT DENSE_RANK() OVER (ORDER BY COUNT(DISTINCT annee) DESC, SUM(nombre) DESC) AS rang, prenom, sexe, COUNT(DISTINCT annee) AS nombre_d_annees, SUM(nombre) AS nombre_de_naissances FROM nat2020bis WHERE prenom <> 'PRENOMS_RARES' GROUP BY prenom, sexe;
+---------- Only boys
+SELECT DENSE_RANK() OVER (ORDER BY COUNT(DISTINCT annee) DESC, SUM(nombre) DESC) AS rang, prenom, sexe, COUNT(DISTINCT annee) AS nombre_d_annees, SUM(nombre) AS nombre_de_naissances FROM nat2020bis WHERE prenom <> 'PRENOMS_RARES' AND sexe = 'garçon' GROUP BY prenom, sexe;
+---------- Only girls
+SELECT DENSE_RANK() OVER (ORDER BY COUNT(DISTINCT annee) DESC, SUM(nombre) DESC) AS rang, prenom, sexe, COUNT(DISTINCT annee) AS nombre_d_annees, SUM(nombre) AS nombre_de_naissances FROM nat2020bis WHERE prenom <> 'PRENOMS_RARES' AND sexe = 'fille' GROUP BY prenom, sexe;
 
------- Only girls
----------- Create the table
-CREATE TABLE palmares_annees_par_nombre_de_prenoms_de_filles (rang INT, annee INT, sexe VARCHAR, nombre_de_prenoms INT);
----------- Insert the data
-INSERT INTO palmares_annees_par_nombre_de_prenoms_de_filles 
-SELECT * FROM (SELECT DENSE_RANK() OVER (ORDER BY COUNT(DISTINCT prenom) DESC) AS rang, annee, sexe, COUNT(DISTINCT prenom) AS nombre_de_prenoms FROM nat2020bis WHERE sexe = 'fille' GROUP BY annee, sexe) a;
----------- => 121 rows have been created
----------- Display the table
-SELECT * FROM palmares_annees_par_nombre_de_prenoms_de_filles;
+-- 3) Specific rankings of the decades
 
------- Rankings of the first names based on the number of births
+------ Based on the number of births
 
------- Without split per sex
----------- Create the table
-CREATE TABLE palmares_prenoms_par_nombre_de_naissances (rang INT, prenom VARCHAR, nombre_de_naissances INT);
----------- Insert the data
-INSERT INTO palmares_prenoms_par_nombre_de_naissances 
-SELECT * FROM (SELECT DENSE_RANK() OVER (ORDER BY SUM(nombre) DESC, prenom) AS rang, prenom, SUM(nombre) AS nombre_de_naissances FROM nat2020bis GROUP BY prenom) a;
----------- => 33 099 rows have been created
----------- Display the table
-SELECT * FROM palmares_prenoms_par_nombre_de_naissances;
+---------- Only the first name "MARIE"
+SELECT DENSE_RANK() OVER (ORDER BY SUM(nombre) DESC) AS rang, decade, SUM(nombre) AS nombre_de_naissances FROM nat2020bis WHERE prenom = 'MARIE' GROUP BY decade;
+---------- Only the first names "LIÈS", "DJAMEL","MERIEM", "RACHID"
+SELECT DENSE_RANK() OVER (ORDER BY SUM(nombre) DESC) AS rang, decade, SUM(nombre) AS nombre_de_naissances FROM nat2020bis WHERE prenom IN ('LIÈS', 'DJAMEL', 'MERIEM', 'RACHID') GROUP BY decade;
 
------- With split per sex
----------- Create the table
-CREATE TABLE palmares_prenoms_par_nombre_de_naissances_par_sexe (rang INT, prenom VARCHAR, sexe VARCHAR, nombre_de_naissances INT);
----------- Insert the data
-INSERT INTO palmares_prenoms_par_nombre_de_naissances_par_sexe 
-SELECT * FROM (SELECT DENSE_RANK() OVER (ORDER BY SUM(nombre) DESC, prenom) AS rang, prenom, sexe, SUM(nombre) AS nombre_de_naissances FROM nat2020bis GROUP BY prenom, sexe) a;
----------- => 35 164 rows have been created
----------- Display the table
-SELECT * FROM palmares_prenoms_par_nombre_de_naissances_par_sexe;
+-- 4) Specific rankings of the first names
 
------- Only boys
----------- Create the table
-CREATE TABLE palmares_prenoms_par_nombre_de_naissances_de_garcons (rang INT, prenom VARCHAR, sexe VARCHAR, nombre_de_naissances INT);
----------- Insert the data
-INSERT INTO palmares_prenoms_par_nombre_de_naissances_de_garcons 
-SELECT * FROM (SELECT DENSE_RANK() OVER (ORDER BY SUM(nombre) DESC, prenom) AS rang, prenom, sexe, SUM(nombre) AS nombre_de_naissances FROM nat2020bis WHERE sexe = 'garçon' GROUP BY prenom, sexe) a;
----------- => 16 016 rows have been created
----------- Display the table
-SELECT * FROM palmares_prenoms_par_nombre_de_naissances_de_garcons;
+------ Based on the number of births (then on the number of disctinct years)
 
--- Detailed statistics per first names for a given year
-SELECT DENSE_RANK() OVER (ORDER BY SUM(nombre) DESC) AS rang, preusuel, SUM(nombre) AS nombre_de_naissance FROM nat2020 WHERE preusuel <> '_PRENOMS_RARES' AND annais = '2020' GROUP BY preusuel
+---------- Only the first names beginning by "CHA"
+SELECT DENSE_RANK() OVER (ORDER BY SUM(nombre) DESC, COUNT(DISTINCT annee) DESC) AS rang, prenom, SUM(nombre) AS nombre_de_naissances, COUNT(DISTINCT annee) AS nombre_d_annees FROM nat2020bis WHERE prenom LIKE 'CHA%' GROUP BY prenom;
+---------- Only the first names composed of 3 characters and finishing by "VA"
+SELECT DENSE_RANK() OVER (ORDER BY SUM(nombre) DESC, COUNT(DISTINCT annee) DESC) AS rang, prenom, SUM(nombre) AS nombre_de_naissances, COUNT(DISTINCT annee) AS nombre_d_annees FROM nat2020bis WHERE prenom LIKE '_VA' GROUP BY prenom;
 
-SELECT rang, preusuel, nombre_de_naissance, nombre_moyen_de_naissance FROM a
-LEFT JOIN b USING(annais);
-
-
-CREATE PROCEDURE palmares_prenoms_par_nb_annuel_naissance(@annais VARCHAR)
-AS BEGIN
-SELECT DENSE_RANK() OVER (ORDER BY SUM(nombre) DESC) AS rang, preusuel, SUM(nombre) AS nombre_de_naissance FROM nat2020 WHERE preusuel <> '_PRENOMS_RARES' AND annais = @annais GROUP BY preusuel
-END
-
--- 1) About the number of births :
+-- 5) Diverse queries
 
 ------ What is the average number of births per first name ?
 ---------- over the whole period (from 1900 to 2020) at the national scope ?
