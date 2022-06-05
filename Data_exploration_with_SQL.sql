@@ -213,9 +213,9 @@ SELECT annee FROM nat2020bis WHERE annee = 'XXXX';
 
 -- => we will explore the table 'nat2020bis'
 
--- 1) Global rankings of the years
+-- 1) Rankings of the years
 
------- Based on the number of births
+------ Based on the number of births for all first names
 
 ---------- Boys and girls combined
 SELECT DENSE_RANK() OVER (ORDER BY SUM(nombre) DESC) AS rang, annee, SUM(nombre) AS nombre_de_naissances FROM nat2020bis GROUP BY annee;
@@ -225,6 +225,13 @@ SELECT DENSE_RANK() OVER (ORDER BY SUM(nombre) DESC, annee) AS rang, annee, sexe
 SELECT DENSE_RANK() OVER (ORDER BY SUM(nombre) DESC) AS rang, annee, sexe, SUM(nombre) AS nombre_de_naissances FROM nat2020bis WHERE sexe = 'garçon' GROUP BY annee, sexe;
 ---------- Only girls
 SELECT DENSE_RANK() OVER (ORDER BY SUM(nombre) DESC) AS rang, annee, sexe, SUM(nombre) AS nombre_de_naissances FROM nat2020bis WHERE sexe = 'fille' GROUP BY annee, sexe;
+
+------ Based on the number of births for specific first names
+
+---------- Boys and girls combined / Only the first name "MARIE"
+SELECT DENSE_RANK() OVER (ORDER BY SUM(nombre) DESC) AS rang, decade, SUM(nombre) AS nombre_de_naissances FROM nat2020bis WHERE prenom = 'MARIE' GROUP BY decade;
+---------- Boys and girls combined / Only the first names "LIÈS", "DJAMEL","MERIEM", "RACHID"
+SELECT DENSE_RANK() OVER (ORDER BY SUM(nombre) DESC) AS rang, decade, SUM(nombre) AS nombre_de_naissances FROM nat2020bis WHERE prenom IN ('LIÈS', 'DJAMEL', 'MERIEM', 'RACHID') GROUP BY decade;
 
 ------ Based on the number of distinct first names
 
@@ -237,9 +244,9 @@ SELECT DENSE_RANK() OVER (ORDER BY COUNT(DISTINCT prenom) DESC) AS rang, annee, 
 ---------- Only girls
 SELECT DENSE_RANK() OVER (ORDER BY COUNT(DISTINCT prenom) DESC) AS rang, annee, sexe, COUNT(DISTINCT prenom) AS nombre_de_prenoms FROM nat2020bis WHERE sexe = 'fille' GROUP BY annee, sexe;
 
--- 2) Global rankings of the first names
+-- 2) Rankings of the first names
 
------- Based on the number of births (then on the number of disctinct years)
+------ Based on the number of births (then on the number of disctinct years) for all first names (except "PRENOMS_RARES") and all years
 
 ---------- Boys and girls combined
 SELECT DENSE_RANK() OVER (ORDER BY SUM(nombre) DESC, COUNT(DISTINCT annee) DESC) AS rang, prenom, SUM(nombre) AS nombre_de_naissances, COUNT(DISTINCT annee) AS nombre_d_annees FROM nat2020bis WHERE prenom <> 'PRENOMS_RARES' GROUP BY prenom;
@@ -249,6 +256,13 @@ SELECT DENSE_RANK() OVER (ORDER BY SUM(nombre) DESC, COUNT(DISTINCT annee) DESC)
 SELECT DENSE_RANK() OVER (ORDER BY SUM(nombre) DESC, COUNT(DISTINCT annee) DESC) AS rang, prenom, sexe, SUM(nombre) AS nombre_de_naissances, COUNT(DISTINCT annee) AS nombre_d_annees FROM nat2020bis WHERE prenom <> 'PRENOMS_RARES' AND sexe = 'garçon' GROUP BY prenom, sexe;
 ---------- Only girls
 SELECT DENSE_RANK() OVER (ORDER BY SUM(nombre) DESC, COUNT(DISTINCT annee) DESC) AS rang, prenom, sexe, SUM(nombre) AS nombre_de_naissances, COUNT(DISTINCT annee) AS nombre_d_annees FROM nat2020bis WHERE prenom <> 'PRENOMS_RARES' AND sexe = 'fille' GROUP BY prenom, sexe;
+
+------ Based on the number of births (then on the number of disctinct years) for specific first names and specific years
+
+---------- Boys and girls combined / Only the first names beginning by "CHA" / Since year 2000
+SELECT DENSE_RANK() OVER (ORDER BY SUM(nombre) DESC, COUNT(DISTINCT annee) DESC) AS rang, prenom, SUM(nombre) AS nombre_de_naissances, COUNT(DISTINCT annee) AS nombre_d_annees FROM nat2020bis WHERE prenom LIKE 'CHA%' AND annee >= 2000 GROUP BY prenom;
+---------- Boys and girls combined / Only the first names composed of 3 characters and finishing by "VA" / Only years between 2005 and 2015 
+SELECT DENSE_RANK() OVER (ORDER BY SUM(nombre) DESC, COUNT(DISTINCT annee) DESC) AS rang, prenom, SUM(nombre) AS nombre_de_naissances, COUNT(DISTINCT annee) AS nombre_d_annees FROM nat2020bis WHERE prenom LIKE '_VA' AND annee BETWEEN 2005 AND 2015 GROUP BY prenom;
 
 ------ Based on the number of distinct years (then on the number of births)
 
@@ -261,126 +275,55 @@ SELECT DENSE_RANK() OVER (ORDER BY COUNT(DISTINCT annee) DESC, SUM(nombre) DESC)
 ---------- Only girls
 SELECT DENSE_RANK() OVER (ORDER BY COUNT(DISTINCT annee) DESC, SUM(nombre) DESC) AS rang, prenom, sexe, COUNT(DISTINCT annee) AS nombre_d_annees, SUM(nombre) AS nombre_de_naissances FROM nat2020bis WHERE prenom <> 'PRENOMS_RARES' AND sexe = 'fille' GROUP BY prenom, sexe;
 
--- 3) Specific rankings of the decades
+-- 3) Main annual statistics (average, maximum, minimum, standard deviation) per decade
 
 ------ Based on the number of births
+WITH a AS (SELECT decade, annee, SUM(nombre) AS nombre_de_naissances FROM nat2020bis GROUP BY decade, annee)
+SELECT DISTINCT decade, ROUND(AVG(nombre_de_naissances) OVER (PARTITION BY decade)) AS nombre_annuel_moyen_de_naissances, MAX(nombre_de_naissances) OVER (PARTITION BY decade) AS nombre_annuel_maximum_de_naissances, MIN(nombre_de_naissances) OVER (PARTITION BY decade) AS nombre_annuel_minimum_de_naissances, ROUND(STDDEV(nombre_de_naissances) OVER (PARTITION BY decade)) AS ecart_type FROM a ORDER BY decade;
 
----------- Only the first name "MARIE"
-SELECT DENSE_RANK() OVER (ORDER BY SUM(nombre) DESC) AS rang, decade, SUM(nombre) AS nombre_de_naissances FROM nat2020bis WHERE prenom = 'MARIE' GROUP BY decade;
----------- Only the first names "LIÈS", "DJAMEL","MERIEM", "RACHID"
-SELECT DENSE_RANK() OVER (ORDER BY SUM(nombre) DESC) AS rang, decade, SUM(nombre) AS nombre_de_naissances FROM nat2020bis WHERE prenom IN ('LIÈS', 'DJAMEL', 'MERIEM', 'RACHID') GROUP BY decade;
+------ Based on the number of distinct first names
+WITH a AS (SELECT decade, annee, COUNT(DISTINCT prenom) AS nombre_de_prenoms FROM nat2020bis GROUP BY decade, annee)
+SELECT DISTINCT decade, ROUND(AVG(nombre_de_prenoms) OVER (PARTITION BY decade)) AS nombre_annuel_moyen_de_prenoms, MAX(nombre_de_prenoms) OVER (PARTITION BY decade) AS nombre_annuel_maximum_de_prenoms, MIN(nombre_de_prenoms) OVER(PARTITION BY decade) AS nombre_annuel_minimum_de_prenoms, ROUND(STDDEV(nombre_de_prenoms) OVER (PARTITION BY decade)) AS ecart_type FROM a ORDER BY decade;
 
--- 4) Specific rankings of the first names
+------ Based on the number of births per first name
+WITH a AS (SELECT decade, annee, prenom, SUM(nombre) AS nombre_de_naissances FROM nat2020bis GROUP BY decade, annee, prenom)
+SELECT DISTINCT decade, ROUND(AVG(nombre_de_naissances) OVER (PARTITION BY decade)) AS nombre_annuel_moyen_de_naissances_par_prenom, MAX(nombre_de_naissances) OVER (PARTITION BY decade) AS nombre_annuel_maximum_de_naissances_par_prenom, MIN(nombre_de_naissances) OVER (PARTITION BY decade) AS nombre_annuel_minimum_de_naissances_par_prenom, ROUND(STDDEV(nombre_de_naissances) OVER (PARTITION BY decade)) AS ecart_type FROM a ORDER BY decade;
 
------- Based on the number of births (then on the number of disctinct years)
+-- 4) Diverse queries
 
----------- Only the first names beginning by "CHA"
-SELECT DENSE_RANK() OVER (ORDER BY SUM(nombre) DESC, COUNT(DISTINCT annee) DESC) AS rang, prenom, SUM(nombre) AS nombre_de_naissances, COUNT(DISTINCT annee) AS nombre_d_annees FROM nat2020bis WHERE prenom LIKE 'CHA%' GROUP BY prenom;
----------- Only the first names composed of 3 characters and finishing by "VA"
-SELECT DENSE_RANK() OVER (ORDER BY SUM(nombre) DESC, COUNT(DISTINCT annee) DESC) AS rang, prenom, SUM(nombre) AS nombre_de_naissances, COUNT(DISTINCT annee) AS nombre_d_annees FROM nat2020bis WHERE prenom LIKE '_VA' GROUP BY prenom;
+------ Which first names have ranked each year in the top 10 for the annual number of births during the last 3 years (from 2018 to 2020) ?
+WITH aa18 AS (SELECT prenom FROM (SELECT annee, prenom, SUM(nombre), DENSE_RANK() OVER (PARTITION BY annee ORDER BY SUM(nombre) DESC) AS rang FROM nat2020bis GROUP BY annee, prenom HAVING annee = 2018) a18 WHERE rang <=10 AND prenom <> 'PRENOMS_RARES'), 
+aa19 AS (SELECT prenom FROM (SELECT annee, prenom, SUM(nombre), DENSE_RANK() OVER (PARTITION BY annee ORDER BY SUM(nombre) DESC) AS rang FROM nat2020bis GROUP BY annee, prenom HAVING annee = 2019) a19 WHERE rang <=10 AND prenom <> 'PRENOMS_RARES'), 
+aa20 AS (SELECT prenom FROM (SELECT annee, prenom, SUM(nombre), DENSE_RANK() OVER (PARTITION BY annee ORDER BY SUM(nombre) DESC) AS rang FROM nat2020bis GROUP BY annee, prenom HAVING annee = 2020) a20 WHERE rang <=10 AND prenom <> 'PRENOMS_RARES') 
+SELECT prenom FROM aa18
+INNER JOIN aa19 USING(prenom)
+INNER JOIN aa20 USING(prenom);
 
--- 5) Diverse queries
-
------- What is the average number of births per first name ?
----------- over the whole period (from 1900 to 2020) at the national scope ?
-SELECT ROUND(AVG(nombre)) FROM nat2020 WHERE annais <> 'XXXX';
----------- => 136 births
----------- during the last decade (from 2011 to 2020) at the national scope ?
-SELECT ROUND(AVG(nombre)) FROM nat2020 WHERE annais BETWEEN '2011' AND '2020';
----------- => 56 births
----------- during the year 1968 in the Paris region (departments : 75, 77, 78, 91, 92, 93, 94, 95) ?
-SELECT ROUND(AVG(nombre)) FROM dpt2020 WHERE annais = '1968' AND dpt IN ('75','77','78','91','92','93','94','95');
----------- => 35 births
-
------- What is the average number of births per year ?
----------- over the whole period (from 1900 to 2020) at the national scope ?
-WITH a(annais, nombre_annuel) AS (SELECT annais, SUM(nombre) AS nombre_annuel FROM nat2020 WHERE annais <> 'XXXX' GROUP BY annais)
-SELECT ROUND(AVG(nombre_annuel)) FROM a;
----------- => 708 766 births
----------- during the fifties (from 1950 to 1959) in the Paris region (departments : 75, 77, 78, 91, 92, 93, 94, 95) ?
-WITH a(annais, nombre_annuel) AS (SELECT annais, SUM(nombre) AS nombre_annuel FROM dpt2020 WHERE annais BETWEEN '1950' AND '1959' AND dpt IN ('75','77','78','91','92','93','94','95') GROUP BY annais)
-SELECT ROUND(AVG(nombre_annuel)) FROM a;
----------- => 123 356 births
-
------- What is the average number of births per year and per sex ?
----------- over the whole period (from 1900 to 2020) at the national scope ?
-WITH a(annais, sexe, nombre_annuel_par_sexe) AS (SELECT annais, sexe, SUM(nombre) AS nombre_annuel_par_sexe FROM nat2020 WHERE annais <> 'XXXX' GROUP BY annais, sexe)
-SELECT sexe, ROUND(AVG(nombre_annuel_par_sexe)) FROM a GROUP BY sexe;
----------- => 357 423 births of boys and 351 343 births of girls (so a total of 708 766 births in line with the expectation)
-
------- Which are the top 3 years for the number of births ?
----------- over the whole period (from 1900 to 2020) at the national scope ?
-SELECT annais, SUM(nombre) AS nombre_annuel FROM nat2020 WHERE annais <> 'XXXX' GROUP BY annais 
-ORDER BY nombre_annuel DESC, annais LIMIT 3;
----------- => "1964" (908 817 births), "1971" (908 325 births), "1972" (903 263 births)
-
------- Which are the last 2 departments for the average annual number of births ?
----------- during the fifties (from 1950 to 1959) among the continental departments (from 1 to 95) ?
-WITH a(dpt, annais, nombre_annuel_par_departement) AS (SELECT dpt, annais, SUM(nombre) AS nombre_annuel_par_departement FROM dpt2020 WHERE dpt BETWEEN '1' AND '95' AND annais BETWEEN '1950' AND '1959'GROUP BY dpt, annais) 
-SELECT dpt, ROUND(AVG(nombre_annuel_par_departement)) AS moyenne_annuelle_par_departement FROM a GROUP BY dpt 
-ORDER BY moyenne_annuelle_par_departement, dpt LIMIT 2;
----------- => "4" (1 034 births), "48" (1 134 births)
-
------- Which are the top 2 first names for the number of births ?
----------- over the whole period (from 1900 to 2020) at the national scope ?
-SELECT preusuel, SUM(nombre) AS nombre_par_prenom FROM nat2020 GROUP BY preusuel 
-ORDER BY nombre_par_prenom DESC LIMIT 2;
----------- => "MARIE" (2 259 135 births), "JEAN" (1 914 606 births)
----------- starting by "N" and ending by "E" during the year 2020 at the national scope ?
-SELECT preusuel, SUM(nombre) AS nombre_par_prenom FROM nat2020 WHERE preusuel LIKE 'N%E' AND annais = '2020' GROUP BY preusuel 
-ORDER BY nombre_par_prenom DESC LIMIT 2;
----------- => "NOÉMIE" (621 births), "NAËLLE" (366 births)
-
------- Which first names have ranked 3rd in the annual number of births ?
----------- during the last 3 years (from 2018 to 2020) ?
-WITH a AS (SELECT annais, preusuel, SUM(nombre) AS nombre_par_an, DENSE_RANK() OVER (PARTITION BY annais ORDER BY SUM(nombre) DESC) AS rang FROM nat2020 GROUP BY annais, preusuel HAVING annais BETWEEN '2018' AND '2020')
-SELECT annais, preusuel, nombre_par_an FROM a WHERE rang = 3;
----------- => "RAPHAËL" in "2018" (4 594 births), "LÉO" in "2019" (4 662 births), "GABRIEL" in "2020" (4 415 births)
-
------- Which first names have ranked each year in the top 10 for the annual number of births ?
----------- during the last 3 years (from 2018 to 2020) ?
-WITH aa18 AS (SELECT preusuel FROM (SELECT annais, preusuel, SUM(nombre), DENSE_RANK() OVER (PARTITION BY annais ORDER BY SUM(nombre) DESC) AS rang FROM nat2020 GROUP BY annais, preusuel HAVING annais = '2018') a18 WHERE rang <=10), 
-aa19 AS (SELECT preusuel FROM (SELECT annais, preusuel, SUM(nombre), DENSE_RANK() OVER (PARTITION BY annais ORDER BY SUM(nombre) DESC) AS rang FROM nat2020 GROUP BY annais, preusuel HAVING annais = '2019') a19 WHERE rang <=10), 
-aa20 AS (SELECT preusuel FROM (SELECT annais, preusuel, SUM(nombre), DENSE_RANK() OVER (PARTITION BY annais ORDER BY SUM(nombre) DESC) AS rang FROM nat2020 GROUP BY annais, preusuel HAVING annais = '2020') a20 WHERE rang <=10) 
-SELECT preusuel FROM aa18 
-INNER JOIN aa19 USING(preusuel)
-INNER JOIN aa20 USING(preusuel);
----------- => "ARTHUR", "EMMA", "GABRIEL", "JADE", "LÉO", "LOUIS", "LOUISE", "RAPHAËL"
-
--- 2) About the number of first names :
-
------- How many distinct first names have been given ?
----------- during the last decade (from 2011 to 2020) at the national scope ?
-SELECT COUNT(DISTINCT preusuel) FROM nat2020 WHERE annais BETWEEN '2011' AND '2020';
----------- => 22 103 distinct first names
----------- in average per year during the last decade (from 2011 to 2020) at the national scope ?
-WITH a(annais, nombre_annuel_de_prenom) AS (SELECT annais, COUNT(DISTINCT preusuel) AS nombre_annuel_de_prenom FROM nat2020 WHERE annais BETWEEN '2011' AND '2020' GROUP BY annais)
-SELECT ROUND(AVG(nombre_annuel_de_prenom)) FROM a;
----------- => 13 204 distinct first names
-
------- Which year ranks 4th in the annual number of distinct first names ?
----------- over the whole period (from 1900 to 2020) at the national scope ?
-WITH a AS (SELECT annais, COUNT(DISTINCT preusuel) AS nombre_prenom_par_an, DENSE_RANK() OVER (ORDER BY COUNT(DISTINCT preusuel) DESC) AS rang FROM nat2020 WHERE annais <> 'XXXX' GROUP BY annais)
-SELECT annais, nombre_prenom_par_an FROM a WHERE rang = 4;
----------- => "2011" (13 309 distinct first names)
-
------- Which first names have been given for the first time in 2020 since 1900 ?
----------- among the first names composed of 3 characters ?
-WITH a(avant_2020) AS (SELECT DISTINCT preusuel AS avant_2020 FROM nat2020 WHERE annais < '2020'), b(en_2020) AS (SELECT DISTINCT preusuel AS en_2020 FROM nat2020 WHERE annais = '2020') 
+------ Which first names have been given for the first time in 2020 (since 1900) among the first names composed of 3 characters ?
+WITH a(avant_2020) AS (SELECT DISTINCT prenom AS avant_2020 FROM nat2020bis WHERE annee < 2020), b(en_2020) AS (SELECT DISTINCT prenom AS en_2020 FROM nat2020bis WHERE annee = 2020) 
 SELECT en_2020 FROM a
 RIGHT JOIN b ON en_2020 = avant_2020 WHERE avant_2020 IS NULL AND LENGTH(en_2020) = 3 ORDER BY en_2020;
----------- => "KYA", "OVA", "SAI"
----------- among the last 200 first names for the number of births ?
-WITH a(avant_2020) AS (SELECT DISTINCT preusuel AS avant_2020 FROM nat2020 WHERE annais < '2020'), b(en_2020) AS (SELECT preusuel AS en_2020, SUM(nombre) AS nombre_par_prenom FROM nat2020 WHERE annais = '2020' GROUP BY preusuel ORDER BY nombre_par_prenom LIMIT 200) 
-SELECT en_2020, nombre_par_prenom FROM a
-RIGHT JOIN b ON en_2020 = avant_2020 WHERE avant_2020 IS NULL ORDER BY nombre_par_prenom, en_2020;
----------- => "CONSTANZA", "MELSA", "MYRYAM", "NIRA"
+
+------ Which first names have been given for the first time in 1950 (since 1900) among the last 200 first names for the number of births ?
+WITH a(avant_1950) AS (SELECT DISTINCT prenom AS avant_1950 FROM nat2020bis WHERE annee < 1950), b(en_1950) AS (SELECT prenom AS en_1950, SUM(nombre) AS nombre_de_naissances FROM nat2020bis WHERE annee = 2020 GROUP BY prenom ORDER BY nombre_de_naissances LIMIT 200) 
+SELECT en_1950, nombre_de_naissances FROM a
+RIGHT JOIN b ON en_1950 = avant_1950 WHERE avant_1950 IS NULL ORDER BY nombre_de_naissances, en_1950;
 
 ------ Which first names have not been given any more since 1990 ?
-WITH a(before_1990) AS (SELECT DISTINCT preusuel AS before_1990 FROM nat2020 WHERE annais < '1990'), b(since_1990) AS (SELECT DISTINCT preusuel AS since_1990 FROM nat2020 WHERE annais >= '1990') 
+WITH a(before_1990) AS (SELECT DISTINCT prenom AS before_1990 FROM nat2020bis WHERE annee < 1990), b(since_1990) AS (SELECT DISTINCT prenom AS since_1990 FROM nat2020bis WHERE annee >= 1990) 
 SELECT before_1990 FROM a
 LEFT JOIN b ON since_1990 = before_1990 WHERE since_1990 IS NULL ORDER BY before_1990;
------- => "UTE"
 
+----- Which years the first names "ZYGMUND" and "HECTOR" have been given in ?
+WITH a AS (SELECT DISTINCT annee, prenom FROM nat2020bis WHERE prenom = 'ZYGMUND'),
+b AS (SELECT DISTINCT annee, prenom FROM nat2020bis WHERE prenom = 'HECTOR')
+SELECT annee FROM a
+JOIN b USING(annee);
+
+----- Which years the first name "HECTOR" have been given in but not the first name "ZYGMUND" ?
+WITH a AS (SELECT DISTINCT annee, prenom FROM nat2020bis WHERE prenom = 'ZYGMUND'),
+b AS (SELECT DISTINCT annee, prenom FROM nat2020bis WHERE prenom = 'HECTOR')
+SELECT annee FROM a
+RIGHT JOIN b USING(annee) WHERE a.prenom IS NULL;
 
 
