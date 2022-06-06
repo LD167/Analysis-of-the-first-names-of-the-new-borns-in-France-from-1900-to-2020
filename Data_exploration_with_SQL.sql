@@ -300,17 +300,19 @@ INNER JOIN aa19 USING(prenom)
 INNER JOIN aa20 USING(prenom);
 
 ------ Which first names have been given for the first time in 2020 (since 1900) among the first names composed of 3 characters ?
-WITH a(avant_2020) AS (SELECT DISTINCT prenom AS avant_2020 FROM nat2020bis WHERE annee < 2020), b(en_2020) AS (SELECT DISTINCT prenom AS en_2020 FROM nat2020bis WHERE annee = 2020) 
+WITH a(avant_2020) AS (SELECT DISTINCT prenom AS avant_2020 FROM nat2020bis WHERE annee < 2020), 
+b(en_2020) AS (SELECT DISTINCT prenom AS en_2020 FROM nat2020bis WHERE annee = 2020) 
 SELECT en_2020 FROM a
 RIGHT JOIN b ON en_2020 = avant_2020 WHERE avant_2020 IS NULL AND LENGTH(en_2020) = 3 ORDER BY en_2020;
 
 ------ Which first names have been given for the first time in 1950 (since 1900) among the last 200 first names for the number of births ?
-WITH a(avant_1950) AS (SELECT DISTINCT prenom AS avant_1950 FROM nat2020bis WHERE annee < 1950), b(en_1950) AS (SELECT prenom AS en_1950, SUM(nombre) AS nombre_de_naissances FROM nat2020bis WHERE annee = 2020 GROUP BY prenom ORDER BY nombre_de_naissances LIMIT 200) 
-SELECT en_1950, nombre_de_naissances FROM a
-RIGHT JOIN b ON en_1950 = avant_1950 WHERE avant_1950 IS NULL ORDER BY nombre_de_naissances, en_1950;
+SELECT prenom, SUM(nombre) AS nombre_de_naissances FROM nat2020bis WHERE annee = 1950 GROUP BY prenom  
+HAVING prenom IN (SELECT prenom FROM nat2020bis WHERE annee = 1950 GROUP BY prenom ORDER BY SUM(nombre) LIMIT 200) 
+AND prenom NOT IN (SELECT prenom AS avant_1950 FROM nat2020bis WHERE annee < 1950);
 
 ------ Which first names have not been given any more since 1990 ?
-WITH a(before_1990) AS (SELECT DISTINCT prenom AS before_1990 FROM nat2020bis WHERE annee < 1990), b(since_1990) AS (SELECT DISTINCT prenom AS since_1990 FROM nat2020bis WHERE annee >= 1990) 
+WITH a(before_1990) AS (SELECT DISTINCT prenom AS before_1990 FROM nat2020bis WHERE annee < 1990), 
+b(since_1990) AS (SELECT DISTINCT prenom AS since_1990 FROM nat2020bis WHERE annee >= 1990) 
 SELECT before_1990 FROM a
 LEFT JOIN b ON since_1990 = before_1990 WHERE since_1990 IS NULL ORDER BY before_1990;
 
