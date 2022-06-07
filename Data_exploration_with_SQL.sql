@@ -213,9 +213,9 @@ SELECT annee FROM nat2020bis WHERE annee = 'XXXX';
 
 -- => we will explore the table 'nat2020bis'
 
--- 1) Rankings of the years
+-- 1) Rankings of the years or decades
 
------- Based on the number of births for all first names
+------ Based on the annual number of births for all first names
 
 ---------- Boys and girls combined
 SELECT DENSE_RANK() OVER (ORDER BY SUM(nombre) DESC) AS rang, annee, SUM(nombre) AS nombre_de_naissances FROM nat2020bis GROUP BY annee;
@@ -226,14 +226,14 @@ SELECT DENSE_RANK() OVER (ORDER BY SUM(nombre) DESC) AS rang, annee, sexe, SUM(n
 ---------- Only girls
 SELECT DENSE_RANK() OVER (ORDER BY SUM(nombre) DESC) AS rang, annee, sexe, SUM(nombre) AS nombre_de_naissances FROM nat2020bis WHERE sexe = 'fille' GROUP BY annee, sexe;
 
------- Based on the number of births for specific first names
+------ Based on the decennial number of births for specific first names
 
 ---------- Boys and girls combined / Only the first name "MARIE"
 SELECT DENSE_RANK() OVER (ORDER BY SUM(nombre) DESC) AS rang, decade, SUM(nombre) AS nombre_de_naissances FROM nat2020bis WHERE prenom = 'MARIE' GROUP BY decade;
 ---------- Boys and girls combined / Only the first names "LIÈS", "DJAMEL","MERIEM", "RACHID"
 SELECT DENSE_RANK() OVER (ORDER BY SUM(nombre) DESC) AS rang, decade, SUM(nombre) AS nombre_de_naissances FROM nat2020bis WHERE prenom IN ('LIÈS', 'DJAMEL', 'MERIEM', 'RACHID') GROUP BY decade;
 
------- Based on the number of distinct first names
+------ Based on the annual number of distinct first names
 
 ---------- Boys and girls combined
 SELECT DENSE_RANK() OVER (ORDER BY COUNT(DISTINCT prenom) DESC) AS rang, annee, COUNT(DISTINCT prenom) AS nombre_de_prenoms FROM nat2020bis GROUP BY annee;
@@ -305,7 +305,7 @@ b(en_2020) AS (SELECT DISTINCT prenom AS en_2020 FROM nat2020bis WHERE annee = 2
 SELECT en_2020 FROM a
 RIGHT JOIN b ON en_2020 = avant_2020 WHERE avant_2020 IS NULL AND LENGTH(en_2020) = 3 ORDER BY en_2020;
 
------- Which first names have been given for the first time in 1950 (since 1900) among the last 200 first names for the number of births ?
+------ Which first names have been given for the first time in 1950 (since 1900) among the last 200 first names for the number of births in 1950 ?
 SELECT prenom, SUM(nombre) AS nombre_de_naissances FROM nat2020bis WHERE annee = 1950 GROUP BY prenom  
 HAVING prenom IN (SELECT prenom FROM nat2020bis WHERE annee = 1950 GROUP BY prenom ORDER BY SUM(nombre) LIMIT 200) 
 AND prenom NOT IN (SELECT prenom AS avant_1950 FROM nat2020bis WHERE annee < 1950);
